@@ -1,2 +1,3 @@
 # phenopype-plugins
-plugins for phenopype
+
+AI-plugins for [phenopype](https://www.phenopype.org/) - currently under development, stay tuned!
