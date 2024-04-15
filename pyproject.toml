@@ -11,9 +11,9 @@ description = "Plugins for phenopype"
 readme = "README.md"
 requires-python = "==3.9.*"
 keywords = ["computer vision", "biology"]
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
-    "phenopype>=3.0",
+    "phenopype>=5.0",
 ]
 
 [project.urls]
