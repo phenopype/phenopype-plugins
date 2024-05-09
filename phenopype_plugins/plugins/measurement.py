@@ -11,10 +11,9 @@ import sys
 
 from phenopype import __version__
 from phenopype import _config
-# from phenopype import plugins
-from phenopype import settings
+from phenopype import _vars
 from phenopype import utils
-from phenopype import utils_lowlevel
+from phenopype import utils_lowlevel as ul
 
 #%% namespace cleanup
 
@@ -65,10 +64,10 @@ def detect_landmark(
     fun_name = sys._getframe().f_code.co_name
     
     annotations = kwargs.get("annotations", {})
-    annotation_type = utils_lowlevel._get_annotation_type(fun_name)
+    annotation_type = ul._get_annotation_type(fun_name)
     annotation_id = kwargs.get("annotation_id", None)
 
-    annotation = utils_lowlevel._get_annotation(
+    annotation = ul._get_annotation(
         annotations=annotations,
         annotation_type=annotation_type,
         annotation_id=annotation_id,
@@ -86,15 +85,15 @@ def detect_landmark(
             print("- no mask coordinates provided - cannot detect within mask")
             pass
         else:
-            annotation_id_mask = kwargs.get(settings._mask_type + "_id", None)
-            annotation_mask = utils_lowlevel._get_annotation(
+            annotation_id_mask = kwargs.get(_vars._mask_type + "_id", None)
+            annotation_mask = ul._get_annotation(
                 annotations,
-                settings._mask_type,
+                _vars._mask_type,
                 annotation_id_mask,
                 prep_msg="- masking regions in thresholded image:",
             )
             
-            bbox_coords = cv2.boundingRect(np.asarray(annotation_mask["data"][settings._mask_type], dtype="int32"))
+            bbox_coords = cv2.boundingRect(np.asarray(annotation_mask["data"][_vars._mask_type], dtype="int32"))
     else:
         bbox_coords = None
         
@@ -117,7 +116,7 @@ def detect_landmark(
     }
 
 
-    return utils_lowlevel._update_annotations(
+    return ul._update_annotations(
         annotations=annotations,
         annotation=annotation,
         annotation_type=annotation_type,
