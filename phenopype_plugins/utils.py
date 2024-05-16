@@ -15,17 +15,17 @@ import sys
 
 from importlib import util 
 
-from phenopype import _config
+from phenopype import config
 
 # classes = [""]
-# functions = ["parse_model_config", "get_global_model_config", "load_or_cache_model"]
+# functions = ["parse_modelconfig", "get_global_modelconfig", "load_or_cache_model"]
 
 # def __dir__():
 #     return clean_namespace + classes + functions
 
 #%% 
 
-def model_loader_cacher(model_id, load_function, model_path=None):
+def model_loader_cacher(model_id, load_function, model_path=None, **kwargs):
     """
     Loads or retrieves a cached model based on the provided model_id. If the model is not cached,
     it uses the provided load_function and model_path to load the model and caches it.
@@ -33,32 +33,32 @@ def model_loader_cacher(model_id, load_function, model_path=None):
     Args:
         model_id (str): The identifier for the model.
         load_function (callable): Function to load the model if not cached.
-        model_path (str, optional): Path to the model file. Required if not in _config.models.
+        model_path (str, optional): Path to the model file. Required if not in config.models.
 
     Returns:
         model (object): The loaded or cached model.
     """
-    global _config  # Access to the global configuration dictionary
+    global config  # Access to the global configuration dictionary
 
     # Ensure the model configuration exists for the given model_id
-    if model_id in _config.models:
+    if model_id in config.models:
         if not model_path:  # If no model_path provided, use the one in the configuration
-            model_path = _config.models[model_id].get("model_path")
+            model_path = config.models[model_id].get("model_path")
     
     # Validate that a model_path is available
     if not model_path:
         raise ValueError(f"No model path provided for model_id {model_id}")
 
     # Check if the model hasn't been loaded yet
-    if "model" not in _config.models[model_id]:
+    if "model" not in config.models[model_id]:
         print(f"- loading model \"{model_id}\" into memory from {model_path}")
-        _config.models[model_id]["model"] = load_function(model_path)
+        config.models[model_id]["model"] = load_function(model_path, **kwargs)
     else:
         print(f"- using cached model \"{model_id}\"")
 
     # Update the active model in the configuration
-    _config.active_model = _config.models[model_id]["model"]
-    return _config.active_model
+    config.active_model = config.models[model_id]["model"]
+    return config.active_model
 
 
 def model_path_resolver(func):
@@ -68,10 +68,10 @@ def model_path_resolver(func):
         model_path = kwargs.get('model_path', None)
 
         # Check if model_id is provided and exists in the configuration
-        if model_id and model_id in _config.models:
-            # If model_path is not explicitly provided, retrieve it from _config
+        if model_id and model_id in config.models:
+            # If model_path is not explicitly provided, retrieve it from config
             if not model_path:
-                model_path = _config.models[model_id].get('model_path')
+                model_path = config.models[model_id].get('model_path')
                 # Update the kwargs with the retrieved or confirmed model_path
                 kwargs['model_path'] = model_path
 
@@ -83,22 +83,22 @@ def model_path_resolver(func):
 
     return wrapper
 
-def model_config_path_resolver(func):
+def modelconfig_path_resolver(func):
     def wrapper(*args, **kwargs):
         # Access the model_id and model_path from kwargs
         model_id = kwargs.get('model_id')
-        model_config_path = kwargs.get('model_config_path', None)
+        modelconfig_path = kwargs.get('modelconfig_path', None)
 
         # Check if model_id is provided and exists in the configuration
-        if model_id and model_id in _config.models:
-            # If model_path is not explicitly provided, retrieve it from _config
-            if not model_config_path:
-                model_config_path = _config.models[model_id].get('model_config_path')
+        if model_id and model_id in config.models:
+            # If model_path is not explicitly provided, retrieve it from config
+            if not modelconfig_path:
+                modelconfig_path = config.models[model_id].get('modelconfig_path')
                 # Update the kwargs with the retrieved or confirmed model_path
-                kwargs['model_config_path'] = model_config_path
+                kwargs['modelconfig_path'] = modelconfig_path
 
-        if not model_config_path:
-            raise ValueError("model_config_path must be provided either directly or through model_id")
+        if not modelconfig_path:
+            raise ValueError("modelconfig_path must be provided either directly or through model_id")
 
         # Call the decorated function with updated kwargs
         return func(*args, **kwargs)
@@ -106,10 +106,10 @@ def model_config_path_resolver(func):
     return wrapper
 
 
-def parse_model_config(model_config_path):
+def parse_modelconfig(modelconfig_path):
     
     # Load the module specified by the file path
-    spec = util.spec_from_file_location(os.path.basename(model_config_path), model_config_path)
+    spec = util.spec_from_file_location(os.path.basename(modelconfig_path), modelconfig_path)
     module = util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
@@ -126,7 +126,7 @@ def parse_model_config(model_config_path):
 
     return load_model_fun, preprocess_fun
 
-def modularize_mode_config(module_name, file_path):
+def modularize_modeconfig(module_name, file_path):
     """
     Dynamically loads a Python module from the specified file path and makes it available under the given module name.
 

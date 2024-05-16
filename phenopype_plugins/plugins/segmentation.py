@@ -8,10 +8,10 @@ from rich.pretty import pretty_repr
 from dataclasses import make_dataclass
 import time
 
-from phenopype import _config
 from phenopype import _vars
+from phenopype import utils as pp_utils
+from phenopype import utils_lowlevel as pp_ul
 from phenopype.core import segmentation, visualization
-from phenopype import utils_lowlevel as ul
 
 from phenopype_plugins import utils #parse_model_config, get_global_model_config
 
@@ -121,14 +121,14 @@ def predict_fastSAM(
         ## get mask from annotations
         annotations = kwargs.get("annotations", {})
         annotation_id_mask = kwargs.get(_vars._mask_type + "_id", None)
-        annotation_mask = ul._get_annotation(
+        annotation_mask = pp_ul._get_annotation(
             annotations,
             _vars._mask_type,
             annotation_id_mask,
         )
         ## convert mask coords to ROI
         coords = annotation_mask["data"]["mask"]
-        coords = ul._convert_tup_list_arr(coords)
+        coords = pp_ul._convert_tup_list_arr(coords)
         rx, ry, rw, rh = cv2.boundingRect(coords[0])  
         
         if flags.prompt == "everything-box":
@@ -140,7 +140,7 @@ def predict_fastSAM(
         
     ## resize roi
     roi_orig_height, roi_orig_width = roi_orig.shape[:2]
-    roi = ul._resize_image(
+    roi = pp_utils.resize_image(
         roi_orig, width=resize_roi, height=resize_roi)
         
     # =============================================================================
@@ -183,8 +183,8 @@ def predict_fastSAM(
     
     ## box-post
     if flags.prompt == "box":      
-        mask_coords = ul._resize_mask([rx, ry, rw, rh], resize_x, resize_y)
-        mask_coords_sam = ul._convert_box_xywh_to_xyxy(mask_coords)
+        mask_coords = pp_ul._resize_mask([rx, ry, rw, rh], resize_x, resize_y)
+        mask_coords_sam = pp_ul._convert_box_xywh_to_xyxy(mask_coords)
         detections = prompt_process.box_prompt(bbox=mask_coords_sam)
     
     ## everything prompt 
@@ -203,7 +203,7 @@ def predict_fastSAM(
         roi_bin[roi_bin==1] = 255
 
     ## resize to original dimensions
-    roi_det = ul._resize_image(
+    roi_det = pp_utils.resize_image(
         roi_bin, width=roi_orig_width, height=roi_orig_height)
     
     if flags.prompt in ["everything", "everything-box", "text"]:
@@ -219,9 +219,10 @@ def predict_fastSAM(
         
     return image_bin
 
-
+@utils.model_path_resolver
 def predict_keras(
     image,
+    model_path,
     model_id="a",
     binary_mask=False,
     threshold=True,
@@ -233,7 +234,7 @@ def predict_keras(
     **kwargs,
 ):
     """
-    Applies a trained deep learning model to an image and returns a grayscale mask 
+    Applies a pre-trained deep learning model to an image and returns a grayscale mask 
     of foreground predictions, which can then be thresholded to return a binary mask.
     
     Three types of thresholding algorithms are supported: 
@@ -282,20 +283,28 @@ def predict_keras(
     flags = make_dataclass(cls_name="flags", 
                            fields=[("binary_mask", bool, binary_mask)])
     
+
+        
     # =============================================================================
-    # annotation management
+    # model management
+    
+    # Load or retrieve the cached model
+    model = utils.model_loader_cacher(model_id, keras.models.load_model, model_path)
+        
+    ## set device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            
+    # =============================================================================
+    
+    image_source = copy.deepcopy(image)
+
+    ## apply binary mask from annotations to image
     if flags.binary_mask:
         
         annotations = kwargs.get("annotations", {})
         annotation_type = kwargs.get("annotation_type", _vars._mask_type)
         annotation_id = kwargs.get(annotation_type + "_id", None)
-            
-    # =============================================================================
-    # execute
-    
-    image_source = copy.deepcopy(image)
-    
-    if flags.binary_mask:
+
         binary_mask = np.zeros(image_source.shape, dtype="uint8")
         if annotation_type == _vars._mask_type:
             print("mask")
@@ -317,29 +326,18 @@ def predict_keras(
                 fill=1)
 
         image_source = cv2.bitwise_and(image_source, binary_mask)    
-    if not model_id.__class__.__name__ == "NoneType":
-        model_path = _config.models[model_id]["model_phenopype_path"]
-        if not "model_loaded" in _config.models[model_id]:
-            print("loading model " + model_id)
-            _config.models[model_id]["model_loaded"] = keras.models.load_model(model_path)
-        _config.active_model = _config.models[model_id]["model_loaded"]
-        _config.active_model_path = model_path
-    
-    elif not _config.active_model_path == model_path or _config.active_model.__class__.__name__ == "NoneType" or force_reload==True:
-        _config.active_model = keras.models.load_model(model_path)
-        _config.active_model_path = model_path
 
-    print("Using current model at " + _config.active_model_path)
-    
-    model = _config.active_model
+    # =============================================================================
+    ## inference
 
-    image_source = ul._resize_image(image_source, width=model.input.shape[1], height=model.input.shape[2])/255
+    image_source = pp_utils.resize_image(image_source, width=model.input.shape[1], height=model.input.shape[2])/255
     image_source = np.expand_dims(image_source, axis=0)
+    
     pred = model.predict(image_source)
      
     mask_predicted = pred[0,:,:,1]*255
     mask_predicted = mask_predicted.astype(np.uint8)
-    mask_predicted = ul._resize_image(mask_predicted, width=image.shape[1], height=image.shape[0], interpolation="linear")
+    mask_predicted = pp_utils.resize_image(mask_predicted, width=image.shape[1], height=image.shape[0], interpolation="linear")
     
     if threshold:
         mask_predicted = segmentation.threshold(
@@ -366,7 +364,43 @@ def predict_torch(
         confidence=0.8,
         **kwargs,
         ):
+    """
+    Perform image segmentation prediction using a pre-trained PyTorch model. This function handles
+    model loading, preprocessing, and prediction, returning a binary mask of the segmented area
+    based on the specified 'primer' type.
 
+    Parameters:
+    ----------
+    image : ndarray
+        The input image array on which segmentation prediction is performed.
+    model_path : str
+        The path to the trained model file.
+    model_config_path : str
+        The path to the model's configuration file.
+    model_id : str, optional
+        Identifier for the model, used to cache or differentiate between models. Default is 'a'.
+    primer : str, optional
+        Type of annotation to use for determining region of interest (ROI) in the image. Supported
+        types are 'contour' and 'mask'. Default is 'contour'.
+    confidence : float, optional
+        Confidence threshold for converting model output to a binary mask. Default is 0.8.
+    **kwargs : dict
+        Additional keyword arguments which may include 'annotations' to specify existing 
+        annotations for refining predictions or other custom parameters.
+
+    Returns:
+    -------
+    ndarray
+        A binary mask image of the segmented region, where the segmentation is based on the 
+        primer type and specified region of interest within the image.
+
+    Examples:
+    --------
+    >>> image = pp.load_image('path/to/image.jpg')
+    >>> mask = pp.plugins.predict_torch(image, 'path/to/model.pth', 'path/to/model_config.py', primer="mask", confidence=0.9)
+    >>> pp.show_image(mask)
+    """
+    
     # =============================================================================
     # model management
         
@@ -386,7 +420,7 @@ def predict_torch(
     
     if primer=="contour":
         annotation_id_input = kwargs.get(_vars._contour_type + "_id", None)
-        annotation = ul._get_annotation(
+        annotation = pp_ul._get_annotation(
             annotations,
             _vars._contour_type,
             annotation_id_input,
@@ -394,7 +428,7 @@ def predict_torch(
         coords = annotation["data"][_vars._contour_type][0]
     elif primer=="mask":
         annotation_id_input = kwargs.get(_vars._mask_type + "_id", None)
-        annotation = ul._get_annotation(
+        annotation = pp_ul._get_annotation(
             annotations,
             _vars._mask_type,
             annotation_id_input,
@@ -404,7 +438,7 @@ def predict_torch(
     # =============================================================================
     ## inference
 
-    roi, roi_box = ul._extract_roi_center(image, coords, 512)
+    roi, roi_box = pp_ul._extract_roi_center(image, coords, 512)
     image_tensor = model_config.preprocess(roi)
     image_tensor = image_tensor.unsqueeze(0)
     image_tensor.to(device)
