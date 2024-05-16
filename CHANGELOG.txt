@@ -1,4 +1,12 @@
+
+0.1.2
+-----
+- refactoring from: phenopype 5.0.1
+
+0.1.1
+-----
+- better model-path management (through decorators)
+
 0.1.0
 -----
-
-initial release!
+- initial release!
