@@ -83,22 +83,22 @@ def model_path_resolver(func):
 
     return wrapper
 
-def modelconfig_path_resolver(func):
+def model_config_path_resolver(func):
     def wrapper(*args, **kwargs):
         # Access the model_id and model_path from kwargs
         model_id = kwargs.get('model_id')
-        modelconfig_path = kwargs.get('modelconfig_path', None)
+        model_config_path = kwargs.get('modelconfig_path', None)
 
         # Check if model_id is provided and exists in the configuration
         if model_id and model_id in config.models:
             # If model_path is not explicitly provided, retrieve it from config
-            if not modelconfig_path:
-                modelconfig_path = config.models[model_id].get('modelconfig_path')
+            if not model_config_path:
+                model_config_path = config.models[model_id].get('model_config_path')
                 # Update the kwargs with the retrieved or confirmed model_path
-                kwargs['modelconfig_path'] = modelconfig_path
+                kwargs['model_config_path'] = model_config_path
 
-        if not modelconfig_path:
-            raise ValueError("modelconfig_path must be provided either directly or through model_id")
+        if not model_config_path:
+            raise ValueError("model_config_path must be provided either directly or through model_id")
 
         # Call the decorated function with updated kwargs
         return func(*args, **kwargs)
@@ -106,10 +106,10 @@ def modelconfig_path_resolver(func):
     return wrapper
 
 
-def parse_modelconfig(modelconfig_path):
+def parse_model_config(model_config_path):
     
     # Load the module specified by the file path
-    spec = util.spec_from_file_location(os.path.basename(modelconfig_path), modelconfig_path)
+    spec = util.spec_from_file_location(os.path.basename(model_config_path), model_config_path)
     module = util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
@@ -126,7 +126,7 @@ def parse_modelconfig(modelconfig_path):
 
     return load_model_fun, preprocess_fun
 
-def modularize_modeconfig(module_name, file_path):
+def modularize_model_config(module_name, file_path):
     """
     Dynamically loads a Python module from the specified file path and makes it available under the given module name.
 

@@ -10,8 +10,8 @@ import os
 import sys
 
 from phenopype import __version__
-from phenopype import _config
 from phenopype import _vars
+from phenopype import config
 from phenopype import utils
 from phenopype import utils_lowlevel as ul
 

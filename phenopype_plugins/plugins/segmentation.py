@@ -13,7 +13,7 @@ from phenopype import utils as pp_utils
 from phenopype import utils_lowlevel as pp_ul
 from phenopype.core import segmentation, visualization
 
-from phenopype_plugins import utils #parse_model_config, get_global_model_config
+from phenopype_plugins import utils
 
 import warnings
 
@@ -405,7 +405,7 @@ def predict_torch(
     # model management
         
     ## load model config
-    model_config = utils.modularize_mode_config('model_config', model_config_path)
+    model_config = utils.modularize_model_config('model_config', model_config_path)
 
     # Load or retrieve the cached model
     model = utils.model_loader_cacher(model_id, model_config.load_model, model_path)
