@@ -1,28 +1,200 @@
 #%% imports
 
-clean_namespace = dir()
-
 import copy
 import cv2
-import math
 import numpy as np
-import os
 import sys
+from rich.pretty import pretty_repr
+from dataclasses import make_dataclass
+import time
 
-from phenopype import __version__
 from phenopype import _vars
-from phenopype import config
-from phenopype import utils
-from phenopype import utils_lowlevel as ul
+from phenopype import utils as pp_utils
+from phenopype import utils_lowlevel as pp_ul
+from phenopype.core import segmentation, visualization
 
-#%% namespace cleanup
+from phenopype_plugins import utils
 
-funs = ['detect_landmark']
+import warnings
 
-def __dir__():
-    return clean_namespace + funs
+try:
+    from radiomics import featureextractor
+    import SimpleITK as sitk
+except ImportError:
+    warnings.warn("Failed to import pyradiomics. Some functionalities may not work.", ImportWarning)
+
 
 #%% functions
+
+
+def extract_radiomic_features(
+    image,
+    annotations,
+    features=["firstorder"],
+    channel_names=["blue", "green", "red"],
+    min_diameter=5,
+    **kwargs,
+):
+    """
+    Collects 120 texture features using the pyradiomics feature extractor
+    ( https://pyradiomics.readthedocs.io/en/latest/features.html ):
+
+    - firstorder: First Order Statistics (19 features)
+    - shape2d: Shape-based (2D) (16 features)
+    - glcm: Gray Level Cooccurence Matrix (24 features)
+    - gldm: Gray Level Dependence Matrix (14 features)
+    - glrm: Gray Level Run Length Matrix (16 features)
+    - glszm: Gray Level Size Zone Matrix (16 features)
+    - ngtdm: Neighbouring Gray Tone Difference Matrix (5 features)
+
+    Features are collected from every contour that is supplied along with the raw
+    image, which, depending on the number of contours, may result in long computing 
+    time and very large dataframes.
+
+    The specified channels correspond to the channels that can be selected in
+    phenopype.core.preprocessing.decompose_image.
+
+
+    Parameters
+    ----------
+    image : ndarray
+        input image
+    annotation: dict
+        phenopype annotation containing contours
+    features: ["firstorder", "shape", "glcm", "gldm", "glrlm", "glszm", "ngtdm"] list, optional
+        type of texture features to extract
+    channels : list, optional
+        image channel to extract texture features from. if none is given, will extract from all channels in image
+    min_diameter: int, optional
+        minimum diameter of the contour (shouldn't be too small for sensible feature extraction')
+
+    Returns
+    -------
+    annotations: dict
+        phenopype annotation containing texture features
+
+    """
+
+    # =============================================================================
+    # annotation management
+
+    ## get contours
+    contour_id = kwargs.get(_vars._contour_type + "_id", None)
+    annotation = ul._get_annotation(
+        annotations=annotations,
+        annotation_type=_vars._contour_type,
+        annotation_id=contour_id,
+        kwargs=kwargs,
+    )
+    contours = annotation["data"][_vars._contour_type]
+    contours_support = annotation["data"]["support"]
+    
+    ##  features
+    fun_name = sys._getframe().f_code.co_name
+    annotation_type = ul._get_annotation_type(fun_name)
+    annotation_id = kwargs.get("annotation_id", None)
+
+    # =============================================================================
+    # setup
+
+    tqdm_off = kwargs.get("tqdm_off",True)
+
+    feature_activation = {}
+    for feature in features:
+        feature_activation[feature] = []
+        
+    # =============================================================================
+    # execute
+
+    logger = logging.getLogger("radiomics")
+    logger.setLevel(logging.ERROR)
+
+    ## create forgeround mask
+    foreground_mask_inverted = np.zeros(image.shape[:2], np.uint8)
+    
+    # print(contours)
+    for coords in contours:
+        foreground_mask_inverted = cv2.fillPoly(foreground_mask_inverted, [coords], 255)
+        
+    texture_features = []
+    if image.ndim == 2:
+        layers = 1
+        image = np.dstack((image,image)) 
+    else:
+        layers = image.shape[2]
+        
+    if len(channel_names) > layers:
+        print("- Warning: more channels provided than in given image - skipping excess ones!")
+    
+    for idx1, (coords, support) in _tqdm(
+            enumerate(zip(contours, contours_support)),
+            "Computing texture features",
+            total=len(contours),
+            disable=tqdm_off
+    ):
+
+        output = {}
+        
+        if support["diameter"] > min_diameter:
+
+            for idx2, channel in enumerate(channel_names):
+
+                if (idx2 + 1) > image.shape[2]:
+                    continue
+
+                
+                rx, ry, rw, rh = cv2.boundingRect(coords)
+                data = image[ry : ry + rh, rx : rx + rw, idx2]
+                mask = foreground_mask_inverted[ry : ry + rh, rx : rx + rw]
+                sitk_data = sitk.GetImageFromArray(data)
+                sitk_mask = sitk.GetImageFromArray(mask)
+                
+                if len(np.unique(mask)) > 1:
+                
+                    extractor = featureextractor.RadiomicsFeatureExtractor()
+                    extractor.disableAllFeatures()
+                    extractor.enableFeaturesByName(**feature_activation)
+                    detected_features = extractor.execute(sitk_data, sitk_mask, label=255)
+
+                else:
+                    continue
+
+                for key, val in detected_features.items():
+                    if not "diagnostics" in key:
+                        output[channel + "_" + key.split("_", 1)[1]] = float(val)
+
+        texture_features.append(output)
+        
+        
+
+    # =============================================================================
+    # return
+
+    annotation = {
+        "info": {
+            "phenopype_function": fun_name,
+            "phenopype_version": __version__,
+            "annotation_type": annotation_type,
+        },
+        "settings": {
+            "features": features,
+            "min_diameter": min_diameter,
+            "channels_names": channel_names,
+            "contour_id": contour_id,
+        },
+        "data": {annotation_type: texture_features,},
+    }
+
+    # =============================================================================
+    # return
+
+    return ul._update_annotations(
+        annotations=annotations,
+        annotation=annotation,
+        annotation_type=annotation_type,
+        annotation_id=annotation_id,
+        kwargs=kwargs,
+    )
 
 def detect_landmark(
     image,
