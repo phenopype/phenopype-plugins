@@ -6,7 +6,6 @@ import numpy as np
 import sys
 from rich.pretty import pretty_repr
 from dataclasses import make_dataclass
-import time
 
 from phenopype import _vars
 from phenopype import utils as pp_utils
@@ -292,7 +291,7 @@ def predict_keras(
     model = utils.model_loader_cacher(model_id, keras.models.load_model, model_path)
         
     ## set device
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             
     # =============================================================================
     
