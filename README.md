@@ -24,7 +24,7 @@ Currently, three plugin functions are available - all of them do image segmentat
 
 If you have a GPU and the appropriate drivers install, make sure you install a fitting CUDA version first - e.g., v12.1:
 
-    pip install -c nvidia cuda-toolkit==12.1
+    mamba install -c nvidia cuda-toolkit==12.1
 
 ### `torch`
 
