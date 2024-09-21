@@ -2,6 +2,8 @@
 
 AI-plugins for [phenopype](https://www.phenopype.org/) - currently under development. 
 
+![FastSAM vs SAM](https://lh6.googleusercontent.com/G5AbLo-Pi1fmMZEuA9PFWVzsniMjbTj2GiJIeKiyGndjUVNxOFSyljIQi9C0i9oTkrgeuqpIInWe4jG2RYWw5iRjx3nCaFhqXQATWcgTEaN_GZonBM2eG9jJ7z_Re67LJD4F88ErvaTXREhKrxF3x5w)
+
 Currently, three plugin functions are available - all of them do image segmentation using pre-trained models:
 
  - predict_fastSAM (Fast Segment Anything: https://docs.ultralytics.com/models/fast-sam/) - needs `ultralytics`
