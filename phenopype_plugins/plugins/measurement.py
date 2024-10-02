@@ -6,9 +6,11 @@ import numpy as np
 import sys
 import warnings
 from tqdm import tqdm as _tqdm
+from PIL import Image
 
 from phenopype import _vars, config
 from phenopype.core import preprocessing
+from phenopype import utils as pp_utils
 from phenopype import utils_lowlevel as pp_ul
 from phenopype_plugins import __version__
 
@@ -17,6 +19,15 @@ try:
     import SimpleITK as sitk
 except ImportError:
     warnings.warn("Failed to import pyradiomics. Some functionalities may not work.", ImportWarning)
+    
+    
+try:
+    import matplotlib.pyplot as plt
+    from sklearn.cluster import KMeans
+except ImportError:
+    warnings.warn("Failed to import sckit-learn. Some functionalities may not work.", ImportWarning)
+
+
 
 
 #%% functions
@@ -192,6 +203,95 @@ def extract_radiomic_features(
         annotation_id=annotation_id,
         kwargs=kwargs,
     )
+
+
+
+def recolorize_binclust(
+        image, 
+        method='histogram', 
+        blur=3,
+        n_clusters=3, 
+        bins_per_channel=3,
+        resize=None, 
+        plotting=False, 
+        return_recolorized=False,
+        ):
+        
+    # Apply median blurring
+    image = preprocessing.blur(image, kernel_size=blur, method="median")
+
+    # Apply resizing if requested
+    if resize:
+        image = pp_utils.resize_image(image, width=resize, height=resize)
+        
+    ## separate alpha channel, if present
+    rgb_channels = image[..., :3]  # Only RGB channels
+    alpha_channel = image[..., 3] if image.shape[2] == 4 else None
+
+    ## 
+    pixels = rgb_channels.reshape(-1, 3)
+
+    if method == 'histogram':
+        bins = np.linspace(0, 255, bins_per_channel + 1)  # Bins from 0 to 255
+        centers = 0.5 * (bins[:-1] + bins[1:])
+        digitized = np.clip(np.digitize(pixels, bins) - 1, 0, bins_per_channel - 1)
+        mean_colors = np.zeros((bins_per_channel ** 3, 3))
+        for r in range(bins_per_channel):
+            for g in range(bins_per_channel):
+                for b in range(bins_per_channel):
+                    bin_idx = r + bins_per_channel * g + (bins_per_channel ** 2) * b
+                    bin_mask = (digitized[:, 0] == r) & (digitized[:, 1] == g) & (digitized[:, 2] == b)
+                    if np.any(bin_mask):  # Only compute mean if bin is not empty
+                        mean_colors[bin_idx] = np.mean(pixels[bin_mask], axis=0)
+        indices = digitized[:, 0] + bins_per_channel * digitized[:, 1] + (bins_per_channel ** 2) * digitized[:, 2]
+        recolored_pixels = mean_colors[indices]
+        pixel_assignments = indices.reshape(rgb_channels.shape[0], rgb_channels.shape[1]).astype(np.uint8)
+    elif method == 'kmeans':
+        kmeans = KMeans(n_clusters=n_clusters)
+        kmeans.fit(pixels)
+        centers = kmeans.cluster_centers_.astype(int)
+        recolored_pixels = centers[kmeans.labels_]
+        pixel_assignments = kmeans.labels_.reshape(rgb_channels.shape[0], rgb_channels.shape[1])
+    else:
+        raise ValueError("Invalid method")
+        
+    # Reshape recolored pixels to match the original image's RGB shape
+    recolored_pixels = recolored_pixels.reshape(rgb_channels.shape)
+    recolored_pixels = recolored_pixels.astype(np.uint8)
+
+    # If the original image includes an alpha channel, append it to the recolored image
+    if alpha_channel is not None:
+        recolored_pixels = np.dstack((recolored_pixels, alpha_channel))
+        
+    if plotting:
+        if alpha_channel is not None:
+            image = Image.fromarray(image[..., [2,1,0,3]].astype('uint8'), 'RGBA')
+            recolored_image = Image.fromarray(recolored_pixels[..., [2,1,0,3]].astype('uint8'), 'RGBA')
+        else:
+            image = Image.fromarray(image[..., [2,1,0]].astype('uint8'),'RGB')
+            recolored_image = Image.fromarray(recolored_pixels[..., [2,1,0]].astype('uint8'), 'RGB')
+
+        plt.figure(figsize=(12, 6))
+        plt.subplot(1, 2, 1)
+        plt.imshow(image)
+        plt.title('Original Image')
+        plt.axis('off')
+
+        plt.subplot(1, 2, 2)
+        plt.imshow(recolored_image)
+        plt.title(f'Recolored Image ({method})')
+        plt.axis('off')
+        plt.show()
+
+    return {
+        'centers': centers,
+        'pixel_assignments': pixel_assignments,
+        'recolored_image': recolored_pixels,
+
+    }
+
+
+#%% shelved
 
 # def detect_landmark(
 #     image,

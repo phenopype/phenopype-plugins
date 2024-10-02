@@ -28,7 +28,7 @@ except ImportError:
 
 try:
     from ultralytics import FastSAM, engine
-    from ultralytics.models.fastsam import FastSAMPrompt
+    from ultralytics.models.fastsam import FastSAMPredictor
 except ImportError:
     warnings.warn("Failed to import Ultralytics. Some functionalities may not work.", ImportWarning)
 
@@ -109,6 +109,7 @@ def predict_fastSAM(
     
     if flags.prompt in ["everything", "text"]:
         if trim > 0:
+            
             height, width = image.shape[:2]
             rx, ry = int(round(trim * 0.5 * width)), int(round(trim * 0.5 * width))
             rh, rw = int(round((1 - trim) * height)), int(round((1 - trim) * width))
@@ -174,7 +175,7 @@ def predict_fastSAM(
     # =============================================================================
     ## set up prompt
         
-    prompt_process = FastSAMPrompt(
+    prompt_process = FastSAMPredictor(
         roi, everything_results, device=device)
     
     # =============================================================================

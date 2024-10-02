@@ -4,18 +4,23 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "phenopype-plugins"
+version = "0.1.3"
+requires-python = ">=3.9"
+description = "AI and other plugins for phenopype"
 authors = [
 	{name = "Moritz Lürig", email = "moritz.luerig@gmail.com"},
 	]
-description = "Plugins for phenopype"
 readme = "README.md"
-requires-python = ">=3.9"
-keywords = ["computer vision", "biology"]
-version = "0.1.3"
+license = {file = "LICENSE"}
 dependencies = [
     "phenopype>=5.0",
 ]
-
+keywords = [
+	"computer vision", 
+	"biology", 
+	"ecology", 
+	"evolution"
+	]  
 [project.urls]
 "Homepage" = "https://phenopype.org"
 "Bug Tracker" = "https://github.com/phenopype/phenopype-plugins/issues"
