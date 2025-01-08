@@ -208,28 +208,18 @@ def extract_radiomic_features(
 
 def recolorize_binclust(
         image, 
+        mask=None,
         method='histogram', 
-        blur=3,
+        blur=5,
         n_clusters=3, 
         bins_per_channel=3,
         resize=None, 
-        plotting=False, 
-        return_recolorized=False,
+        plot=False, 
         ):
         
-    # Apply median blurring
-    image = preprocessing.blur(image, kernel_size=blur, method="median")
-
-    # Apply resizing if requested
-    if resize:
-        image = pp_utils.resize_image(image, width=resize, height=resize)
-        
-    ## separate alpha channel, if present
-    rgb_channels = image[..., :3]  # Only RGB channels
-    alpha_channel = image[..., 3] if image.shape[2] == 4 else None
-
-    ## 
-    pixels = rgb_channels.reshape(-1, 3)
+    # prep image for processing
+    pixels = preprocessing.blur(image, kernel_size=blur, method="median")
+    pixels = pixels.reshape(-1, 3)
 
     if method == 'histogram':
         bins = np.linspace(0, 255, bins_per_channel + 1)  # Bins from 0 to 255
@@ -245,40 +235,41 @@ def recolorize_binclust(
                         mean_colors[bin_idx] = np.mean(pixels[bin_mask], axis=0)
         indices = digitized[:, 0] + bins_per_channel * digitized[:, 1] + (bins_per_channel ** 2) * digitized[:, 2]
         recolored_pixels = mean_colors[indices]
-        pixel_assignments = indices.reshape(rgb_channels.shape[0], rgb_channels.shape[1]).astype(np.uint8)
+        pixel_assignments = indices.reshape(image.shape[:2]).astype(np.uint8)
     elif method == 'kmeans':
         kmeans = KMeans(n_clusters=n_clusters)
         kmeans.fit(pixels)
         centers = kmeans.cluster_centers_.astype(int)
         recolored_pixels = centers[kmeans.labels_]
-        pixel_assignments = kmeans.labels_.reshape(rgb_channels.shape[0], rgb_channels.shape[1])
+        pixel_assignments = kmeans.labels_.reshape(image.shape[:2])
     else:
         raise ValueError("Invalid method")
         
     # Reshape recolored pixels to match the original image's RGB shape
-    recolored_pixels = recolored_pixels.reshape(rgb_channels.shape)
-    recolored_pixels = recolored_pixels.astype(np.uint8)
+    recolored_pixels = recolored_pixels.reshape(image.shape).astype(np.uint8)
+    # recolored_pixels = recolored_pixels
 
     # If the original image includes an alpha channel, append it to the recolored image
-    if alpha_channel is not None:
-        recolored_pixels = np.dstack((recolored_pixels, alpha_channel))
+    if mask is not None:
+        recolored_pixels = np.dstack((recolored_pixels, mask))
         
-    if plotting:
-        if alpha_channel is not None:
-            image = Image.fromarray(image[..., [2,1,0,3]].astype('uint8'), 'RGBA')
-            recolored_image = Image.fromarray(recolored_pixels[..., [2,1,0,3]].astype('uint8'), 'RGBA')
+    if plot:
+        if mask is not None:
+            image_rgba = np.dstack((image, mask))
+            image_plot = Image.fromarray(image_rgba[..., [2,1,0,3]].astype('uint8'), 'RGBA')
+            image_recolored = Image.fromarray(recolored_pixels[..., [2,1,0,3]].astype('uint8'), 'RGBA')
         else:
-            image = Image.fromarray(image[..., [2,1,0]].astype('uint8'),'RGB')
-            recolored_image = Image.fromarray(recolored_pixels[..., [2,1,0]].astype('uint8'), 'RGB')
+            image_plot = Image.fromarray(image[..., [2,1,0]].astype('uint8'),'RGB')
+            image_recolored = Image.fromarray(recolored_pixels[..., [2,1,0]].astype('uint8'), 'RGB')
 
         plt.figure(figsize=(12, 6))
         plt.subplot(1, 2, 1)
-        plt.imshow(image)
+        plt.imshow(image_plot)
         plt.title('Original Image')
         plt.axis('off')
 
         plt.subplot(1, 2, 2)
-        plt.imshow(recolored_image)
+        plt.imshow(image_recolored)
         plt.title(f'Recolored Image ({method})')
         plt.axis('off')
         plt.show()
@@ -287,7 +278,6 @@ def recolorize_binclust(
         'centers': centers,
         'pixel_assignments': pixel_assignments,
         'recolored_image': recolored_pixels,
-
     }
 
 
