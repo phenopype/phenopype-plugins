@@ -25,7 +25,7 @@ from phenopype import config
 
 #%% 
 
-def model_loader_cacher(model_id, load_function, model_path=None, **kwargs):
+def model_loader_cacher(model_id, load_function, model_path=None, force_reload=False, **kwargs):
     """
     Loads or retrieves a cached model based on the provided model_id. If the model is not cached,
     it uses the provided load_function and model_path to load the model and caches it.
@@ -48,17 +48,31 @@ def model_loader_cacher(model_id, load_function, model_path=None, **kwargs):
     # Validate that a model_path is available
     if not model_path:
         raise ValueError(f"No model path provided for model_id {model_id}")
-
-    # Check if the model hasn't been loaded yet
-    if "model" not in config.models[model_id]:
-        print(f"- loading model \"{model_id}\" into memory from {model_path}")
-        config.models[model_id]["model"] = load_function(model_path, **kwargs)
     else:
-        print(f"- using cached model \"{model_id}\"")
+        current_model_basename = os.path.basename(model_path)
+
+    # Check if the model is already loaded
+    if "model" in config.models[model_id]:
+        cached_model_path = config.models[model_id].get("model_path")
+        cached_model_basename = os.path.basename(cached_model_path) if cached_model_path else None
+
+        # Check if the cached model's basename matches the current one
+        if cached_model_basename != current_model_basename:
+            print(f"- re-loading model '{current_model_basename}' into cache id '{model_id}'")
+            config.models[model_id]["model"] = load_function(model_path, **kwargs)
+        else:
+            print(f"- using model '{current_model_basename}' cached under id '{model_id}' ")
+    else:
+        print(f"- loading model '{current_model_basename}' into cache id '{model_id}'")
+        config.models[model_id]["model"] = load_function(model_path, **kwargs)
+
+    # Cache the model path for future reference
+    config.models[model_id]["model_path"] = model_path
 
     # Update the active model in the configuration
     config.active_model = config.models[model_id]["model"]
     return config.active_model
+
 
 
 def model_path_resolver(func):

@@ -27,8 +27,9 @@ except ImportError:
     warnings.warn("Failed to import Keras. Some functionalities may not work.", ImportWarning)
 
 try:
-    from ultralytics import FastSAM, engine
+    from ultralytics import YOLO, SAM, FastSAM, engine
     from ultralytics.models.fastsam import FastSAMPredictor
+    from ultralytics.models.sam import SAM2Predictor
 except ImportError:
     warnings.warn("Failed to import Ultralytics. Some functionalities may not work.", ImportWarning)
 
@@ -41,6 +42,8 @@ def predict_fastSAM(
         image,
         model_path,
         model_id="a",
+        backend="FastSAM",
+        force_reload=False,
         prompt="everything",
         trim=0.05,
         resize_roi=1024,
@@ -99,8 +102,8 @@ def predict_fastSAM(
     # model management
     
     # Load or retrieve the cached model
-    model = utils.model_loader_cacher(model_id, FastSAM, model_path)
-    
+    model = utils.model_loader_cacher(model_id, eval(backend), model_path, force_reload)
+        
     ## set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -142,12 +145,12 @@ def predict_fastSAM(
     roi_orig_height, roi_orig_width = roi_orig.shape[:2]
     roi = pp_utils.resize_image(
         roi_orig, width=resize_roi, height=resize_roi)
-        
+            
     # =============================================================================
     # apply model
     
     print(f"- starting {flags.prompt} prompt on device {device}")
-        
+    
     ## encode roi 
     everything_results = model(
         roi,
@@ -158,6 +161,7 @@ def predict_fastSAM(
         iou=iou,
         verbose=False,
     )
+    
     if not everything_results.__class__.__name__ == "NoneType":
         
         speed = everything_results[0].speed
@@ -175,24 +179,44 @@ def predict_fastSAM(
     # =============================================================================
     ## set up prompt
         
-    prompt_process = FastSAMPredictor(
-        roi, everything_results, device=device)
+    # overrides = dict(conf=0.25,  imgsz=1024)
+    
+    # task="segment", 
+    # mode="predict", 
+    # model=os.path.basename(model_path), 
+    # save=False,
+       
+    # overrides = dict(conf=0.25, task="segment", mode="predict", model=model_path, save=False, 
+    #                  imgsz=1024, verbose=False)
+    if backend=="SAM":
+        prompt_process = SAM2Predictor()
+    if backend=="FastSAM":
+        prompt_process = FastSAMPredictor()
+        
+    # everything_results = predictor(roi)
+    results = everything_results
+    out = results[0].plot()
+    
+    
+    # from phenopype import show_image
+    # show_image(out)    
     
     # =============================================================================
     ## get detected objects
     
     ## box-post
-    if flags.prompt == "box":      
+    if flags.prompt == "box":     
+        
         mask_coords = pp_ul._resize_mask([rx, ry, rw, rh], resize_x, resize_y)
         mask_coords_sam = pp_ul._convert_box_xywh_to_xyxy(mask_coords)
-        detections = prompt_process.box_prompt(bbox=mask_coords_sam)
+        detections = prompt_process.prompt(results=everything_results, bboxes=mask_coords_sam)
     
     ## everything prompt 
     elif flags.prompt in ["everything","everything-box"]:
-        detections = prompt_process.everything_prompt()
+        detections = everything_results
 
     elif flags.prompt == "text":
-        detections = prompt_process.text_prompt(text=kwargs.get("text",""))
+        detections = prompt_process.prompt(results=everything_results, texts=kwargs.get("text",""))
         
     ## ultralytics.results to array
     if type(detections[0]) == engine.results.Results:
