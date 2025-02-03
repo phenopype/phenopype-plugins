@@ -1,4 +1,10 @@
 
+0.2.0
+-----
+- implemented functions for ultralytics / YOLO object detection and segmentation models (including reimplementation of FastSAM)
+- re-implemented function for pytorch segmentation models
+- more logical decorators for model management
+
 0.1.3
 -----
 - minor init fix
