@@ -1,16 +1,24 @@
 # phenopype-plugins
 
-AI-plugins for [phenopype](https://www.phenopype.org/) - currently under development. 
+AI-plugins for [phenopype](https://www.phenopype.org/) - still under early development. 
 
 ![FastSAM vs SAM](https://lh6.googleusercontent.com/G5AbLo-Pi1fmMZEuA9PFWVzsniMjbTj2GiJIeKiyGndjUVNxOFSyljIQi9C0i9oTkrgeuqpIInWe4jG2RYWw5iRjx3nCaFhqXQATWcgTEaN_GZonBM2eG9jJ7z_Re67LJD4F88ErvaTXREhKrxF3x5w)
 
-Currently, three plugin functions are available - all of them do image segmentation using pre-trained models:
+Currently, plugins for three libraries are available:
 
- - predict_fastSAM (Fast Segment Anything: https://docs.ultralytics.com/models/fast-sam/) - needs `ultralytics`
- - predict_torch (Torchvision segmentation models: https://pytorch.org/vision/main/models.html) - needs `torch`
- - predict_keras (Keras segmentation models https://keras.io/examples/vision/oxford_pets_image_segmentation/) - needs `keras`
+`ultralytics`
+ - predict_yolo_det (object detection): https://docs.ultralytics.com/tasks/detect/ (fine tuned models only)
+ - predict_yolo_seg (segmentation): https://docs.ultralytics.com/tasks/segment/ (fine tuned models, and the SAM-family [SAM, SAM2, mobileSAM, FastSAM]) 
+
+`pytorch`
+ - predict_torch_seg (Torchvision segmentation models: https://pytorch.org/vision/main/models.html)
+
+`keras`
+ - predict_keras (Keras segmentation models https://keras.io/examples/vision/oxford_pets_image_segmentation/)
 
 ## Installation
+
+Prior to using the functions with phenopype you need to install the respective dependencies:
 
 1\. Install phenopype (see https://www.phenopype.org/docs/installation/phenopype/ for more details): 
 
@@ -62,4 +70,4 @@ If you have a GPU and the appropriate drivers install, make sure you install a f
     pip install ultralytics
 
     ## force reinstall opencv-contrib-python
-    pip install opencv-contrib-python==4.5.2.54 --force-reinstall
+    pip install opencv-contrib-python --force-reinstall
