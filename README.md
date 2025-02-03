@@ -63,7 +63,7 @@ If you have a GPU and the appropriate drivers install, make sure you install a f
 
  
     pip install torch torchvision ## needed
-    pip install ultralytics
+    pip install ultralytics==8.3.64
 
 2\. If you have already installed phenopype and can't or don't want to uninstall it, you can do the following:
     
