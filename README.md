@@ -54,7 +54,7 @@ If you have a GPU and the appropriate drivers install, make sure you install a f
 
 2. Without GPU support:
 
-    pip install keras-gpu
+    pip install keras
 
 
 ### `ultralytics`
